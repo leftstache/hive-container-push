@@ -40,7 +40,9 @@ def sync(docker_client: docker.Client, zk: KazooClient, node_path: str, advertis
 def main():
     global end
 
-    root_zk_path = os.environ.get("ZK_BASE", '/leftstache/hive')
+    root_zk_path = os.environ.get("ZK_BASE", '')
+    if not root_zk_path:
+        root_zk_path = '/leftstache/hive'
     root_zk_path += "/containers"
 
     zk_connection_string = os.environ.get("ZK_HOSTS", "localhost:2181")
