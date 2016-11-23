@@ -45,9 +45,11 @@ def main():
         root_zk_path = '/leftstache/hive'
     root_zk_path += "/containers"
 
-    zk_connection_string = os.environ.get("ZK_HOSTS", "localhost:2181")
+    zk_connection_string = os.environ.get("ZK_HOSTS", None)
+    if not zk_connection_string:
+        zk_connection_string = "localhost:2181"
     advertise_name = os.environ.get("ADVERTISE_NAME", None)
-    if advertise_name is None:
+    if not advertise_name:
         advertise_name = socket.gethostname()
 
     docker_client = docker.from_env()
