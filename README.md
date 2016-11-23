@@ -12,5 +12,5 @@ This allows other services to easily look up what's running on each nodes and li
 
 ### Run
 
-```docker run --rm -e ADVERTISE_NAME={someaddressiblename or ip} -e ZK_HOSTS={zookeeper connection string} -it -v /var/run/docker.sock:/var/run/docker.sock container-push```
+```docker run --rm -e ADVERTISE_NAME={someaddressiblename or ip} -e ZK_HOSTS={zookeeper connection string} -it -v /var/run/docker.sock:/var/run/docker.sock leftstache/hive-container-push```
 
