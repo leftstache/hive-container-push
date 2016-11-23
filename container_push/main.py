@@ -23,7 +23,7 @@ def sync(docker_client: docker.Client, zk: KazooClient, node_path):
 
         if 'Type' in event and event['Type'] == 'container' and 'id' in event:
             container_id = event['id']
-            container_zk_path = "{}/containers/{}".format(node_path, container_id)
+            container_zk_path = "{}/{}".format(node_path, container_id)
 
             if 'Action' in event:
                 if event['Action'] == 'destroy':
@@ -43,6 +43,8 @@ def main():
     global end
 
     root_zk_path = os.environ.get("ZK_BASE", '/leftstache/hive')
+    root_zk_path += "/containers"
+
     zk_connection_string = os.environ.get("ZK_HOSTS", "localhost:2181")
     advertise_name = os.environ.get("ADVERTISE_NAME", None)
     if advertise_name is None:
@@ -51,25 +53,25 @@ def main():
     docker_client = docker.from_env()
     zk = KazooClient(hosts=zk_connection_string)
     zk.start()
-    node_zk_path = "{}/nodes/{}".format(root_zk_path, advertise_name)
     try:
         try:
-            zk.create("{}".format(node_zk_path), makepath=True)
+            zk.create("{}".format(root_zk_path), makepath=True)
         except kazoo.exceptions.NodeExistsError:
             pass
 
-        thread = threading.Thread(target=sync, args=[docker_client, zk, node_zk_path])
+        thread = threading.Thread(target=sync, args=[docker_client, zk, root_zk_path])
         thread.start()
 
         containers = docker_client.containers(all=True)
         for container in containers:
             container = docker_client.inspect_container(container)
             data = json.dumps(container).encode("utf-8")
-            container_zk_path = "{}/containers/{}".format(node_zk_path, container['Id'])
+            container_zk_path = "{}/{}".format(root_zk_path, container['Id'])
             update_data(zk, container_zk_path, data)
 
         thread.join()
     except KeyboardInterrupt:
+        print("shutting down")
         end = True
         try:
             # Force the thread to read an event so it can terminate
@@ -78,7 +80,6 @@ def main():
         finally:
             docker_client.close()
     finally:
-        zk.delete(path=node_zk_path, recursive=True)
         zk.stop()
 
 
@@ -92,13 +93,13 @@ def update_data(zk, path, data):
             print("path doesn't exist to delete", path)
 
     else:
-        print("setting: " + path)
+        print("setting", path)
         try:
             zk.create(path, data, makepath=True, ephemeral=True)
-            print("created: " + path)
+            print("created", path)
         except kazoo.exceptions.NodeExistsError:
             zk.set(path, data)
-            print("updated: " + path)
+            print("updated", path)
 
 if __name__ == "__main__":
     main()
