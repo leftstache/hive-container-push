@@ -1,5 +1,4 @@
 import threading
-from pprint import pprint
 
 import docker
 from kazoo.client import KazooClient
@@ -14,7 +13,7 @@ import requests.exceptions
 end = False
 
 
-def sync(docker_client: docker.Client, zk: KazooClient, node_path):
+def sync(docker_client: docker.Client, zk: KazooClient, node_path: str, advertise_name: str):
     events = docker_client.events()
     for event_str in events:
         if end:
@@ -27,12 +26,11 @@ def sync(docker_client: docker.Client, zk: KazooClient, node_path):
 
             if 'Action' in event:
                 if event['Action'] == 'destroy':
-                    update_data(zk, container_zk_path, None)
+                    update_data(zk, container_zk_path, {}, advertise_name)
                 else:
                     try:
                         container = docker_client.inspect_container(container_id)
-                        data = json.dumps(container).encode("utf-8")
-                        update_data(zk, container_zk_path, data)
+                        update_data(zk, container_zk_path, container, advertise_name)
                     except docker.errors.APIError:
                         pass
                     except requests.exceptions.HTTPError:
@@ -59,15 +57,14 @@ def main():
         except kazoo.exceptions.NodeExistsError:
             pass
 
-        thread = threading.Thread(target=sync, args=[docker_client, zk, root_zk_path])
+        thread = threading.Thread(target=sync, args=[docker_client, zk, root_zk_path, advertise_name])
         thread.start()
 
         containers = docker_client.containers(all=True)
         for container in containers:
             container = docker_client.inspect_container(container)
-            data = json.dumps(container).encode("utf-8")
             container_zk_path = "{}/{}".format(root_zk_path, container['Id'])
-            update_data(zk, container_zk_path, data)
+            update_data(zk, container_zk_path, container, advertise_name)
 
         thread.join()
     except KeyboardInterrupt:
@@ -83,16 +80,17 @@ def main():
         zk.stop()
 
 
-def update_data(zk, path, data):
-    if data is None:
+def update_data(zk: KazooClient, path: str, data: dict, advertise_name: str):
+    if not data:
         try:
             print("deleting", path)
             zk.delete(path, recursive=True)
             print("deleted", path)
         except kazoo.exceptions.NoNodeError:
             print("path doesn't exist to delete", path)
-
     else:
+        data = json.dumps({'node': advertise_name, 'data': data})
+        data = data.encode('utf-8')
         print("setting", path)
         try:
             zk.create(path, data, makepath=True, ephemeral=True)
